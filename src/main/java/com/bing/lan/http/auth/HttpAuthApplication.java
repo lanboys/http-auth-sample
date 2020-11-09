@@ -67,10 +67,10 @@ public class HttpAuthApplication {
       String method = request.getMethod();
       String uri = map.get("uri");
       String nonce = map.get("nonce");
-      //String nc = map.get("nc");
-      //String cnonce = map.get("cnonce").replaceAll("\"","");
+      String nc = map.get("nc");
+      String cnonce = map.get("cnonce").replaceAll("\"","");
 
-      //String qop = map.get("qop");
+      String qop = map.get("qop");
       //客户端传过来的摘要
       String responseFromClient = map.get("response");
 
@@ -81,8 +81,8 @@ public class HttpAuthApplication {
       String a2 = method + ":" + uri;
       String ha2 = Md5Util.md5(a2);
       //服务器计算出的摘要
-      String responseBefore = ha1 + ":" + nonce + ":" + ha2;
-      //String responseBefore = ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2;
+      //String responseBefore = ha1 + ":" + nonce + ":" + ha2;
+      String responseBefore = ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2;
       String responseMD5 = Md5Util.md5(responseBefore);
       //两者摘要相同，即验证成功
       if (responseMD5 != null && !responseMD5.equalsIgnoreCase(responseFromClient)) {
@@ -103,7 +103,7 @@ public class HttpAuthApplication {
     StringBuilder sb = new StringBuilder();
     sb.append("Digest ");
     sb.append("realm").append("=\"realm\",");
-    //sb.append("qop").append("=\"auth\",");
+    sb.append("qop").append("=\"auth\",");
     sb.append("nonce").append("=\"").append(UUID.randomUUID()).append("\",");
     sb.append("opaque").append("=\"").append(UUID.randomUUID()).append("\"");
     String s1 = sb.toString();
