@@ -5,7 +5,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -25,7 +27,6 @@ import javax.servlet.http.HttpServletResponse;
  * <p>
  * HTTP摘要认证
  * https://blog.csdn.net/jesse881025/article/details/43669625
- *
  */
 @RestController
 @SpringBootApplication
@@ -34,6 +35,8 @@ public class HttpAuthApplication {
   public static void main(String[] args) {
     SpringApplication.run(HttpAuthApplication.class, args);
   }
+
+  private List<String> nonceCache = new ArrayList<>();
 
   /**
    * 可用postman进行摘要认证
@@ -61,14 +64,19 @@ public class HttpAuthApplication {
       }
 
       //其参数不为空，利用参数值，和服务器上存储的口令，进行比对。
+      String nonce = map.get("nonce");
+      if (!nonceCache.contains(nonce)) {
+        System.out.println("login(): 随机数验证失败");
+        return "nonce not exit";
+      }
       String username = map.get("username");
       String realm = map.get("realm");
       String password = "12345admin";
       String method = request.getMethod();
       String uri = map.get("uri");
-      String nonce = map.get("nonce");
       String nc = map.get("nc");
-      String cnonce = map.get("cnonce").replaceAll("\"","");
+      String algorithm = map.get("algorithm");
+      String cnonce = map.get("cnonce").replaceAll("\"", "");
 
       String qop = map.get("qop");
       //客户端传过来的摘要
@@ -76,40 +84,55 @@ public class HttpAuthApplication {
 
       //MD5计算
       String a1 = username + ":" + realm + ":" + password;
-      String ha1 = Md5Util.md5(a1);
+      String ha1 = encrypt(algorithm, a1);
 
+      // 注意 请求方法 不要错，大写字母
       String a2 = method + ":" + uri;
-      String ha2 = Md5Util.md5(a2);
+      String ha2 = encrypt(algorithm, a2);
       //服务器计算出的摘要
       //String responseBefore = ha1 + ":" + nonce + ":" + ha2;
       String responseBefore = ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2;
-      String responseMD5 = Md5Util.md5(responseBefore);
+      String responseMD5 = encrypt(algorithm, responseBefore);
       //两者摘要相同，即验证成功
       if (responseMD5 != null && !responseMD5.equalsIgnoreCase(responseFromClient)) {
         //业务逻辑。。。
         //两者摘要不相同，验证失败
+        System.out.println("login(): 验证失败");
         return "fail";
       } else {
         //业务逻辑。。。支付宝支付h5支付
       }
       //其参数为空，返回参数到客户端，并发起质询。
+      System.out.println("login(): 验证成功");
+      nonceCache.remove(nonce);
       return "ok";
     }
-
-     // RFC 2069 标准
-     // RFC 2617 标准 ：当 qop 未指定的情况，也就是遵循简化的 RFC 2069 标准
+    // RFC 2069 标准
+    // RFC 2617 标准 ：当 qop 未指定的情况，也就是遵循简化的 RFC 2069 标准
 
     //拼接AuthorizationHeader,格式如Digestusername="admin",realm="Restrictedarea",nonce="554a3304805fe",qop=auth,opaque="cdce8a5c95a1427d74df7acbf41c9ce0",nc=00000001,response="391bee80324349ea1be02552608c0b10",cnonce="0a4f113b",uri="/MyBlog/home/Response/response_last_modified"
     StringBuilder sb = new StringBuilder();
     sb.append("Digest ");
     sb.append("realm").append("=\"realm\",");
     sb.append("qop").append("=\"auth\",");
-    sb.append("nonce").append("=\"").append(UUID.randomUUID()).append("\",");
-    sb.append("opaque").append("=\"").append(UUID.randomUUID()).append("\"");
+    UUID nonce = UUID.randomUUID();
+    sb.append("nonce").append("=\"").append(nonce).append("\",");
+    nonceCache.add(nonce.toString());
+    //sb.append("opaque").append("=\"").append(UUID.randomUUID()).append("\"");
     String s1 = sb.toString();
     response.setHeader("WWW-Authenticate", s1);
     System.out.println("第一次(): " + s1);
     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
     return "first";
+  }
+
+  public String encrypt(String algorithm, String str) {
+    if ("MD5".equalsIgnoreCase(algorithm)) {
+      return Md5Util.md5(str);
+    }
+    if ("SHA-256".equalsIgnoreCase(algorithm)) {
+      return new SHAUtil().SHA256(str);
+    }
+    return str;
   }
 }
